@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace testrd
 {
-   public class Request
+    public class Request
     {
         static private int counElements;
         private int id;
@@ -15,32 +15,32 @@ namespace testrd
         {
             this.id = counElements++;
         }
-        public static Request GetRequest(Stopper stopSignal) 
+        public static Request GetRequest(Stopper stopSignal)
         {
-                //const int MAX_WAIT_MS = 100;
-                //int waitMs = rand() % MAX_WAIT_MS + 1;
-                //Sleep(waitMs); // emulate long-time operations
- 
-                return stopSignal.IsStop? null : (new Request());
+            //const int MAX_WAIT_MS = 100;
+            //int waitMs = rand() % MAX_WAIT_MS + 1;
+            //Sleep(waitMs); // emulate long-time operations
+
+            return stopSignal.IsStop ? null : (new Request());
         }
- 
- 
+
+
         /* Function from the task specification*/
         public static void ProcessRequest(Request request, Stopper stopSignal)
         {
-                if(stopSignal.IsStop)
-                        return;
- 
-                ///* some processig there */
-                //const int MAX_WAIT_MS = 1000;
-                //int waitMs = rand() % MAX_WAIT_MS + 1;
-                //Sleep(waitMs); // emulate long-time operations
+            if (stopSignal.IsStop)
+                return;
+
+            ///* some processig there */
+            //const int MAX_WAIT_MS = 1000;
+            //int waitMs = rand() % MAX_WAIT_MS + 1;
+            //Sleep(waitMs); // emulate long-time operations
         }
     }
- 
+
     public class Stopper
     {
-        private static event Action changeIsStopEvent; 
+        public static event Action changeAllStopEvent;
         private bool isstop;
         private object lockStopper;
         public bool IsStop
@@ -52,6 +52,13 @@ namespace testrd
                     return isstop;
                 }
             }
+            set
+            {
+                lock (lockStopper)
+                {
+                    isstop = value;
+                }
+            }
         }
 
         void changeIsStop()
@@ -61,136 +68,196 @@ namespace testrd
                 this.isstop = true;
             }
         }
-        Stopper()
+        public Stopper()
         {
             this.isstop = false;
             this.lockStopper = new object();
-            changeIsStopEvent +=this.changeIsStop;
+            changeAllStopEvent += this.changeIsStop;
         }
     }
 
 
-    abstract  class MyThread
+    abstract class MyThread
     {
-        protected  Thread thrd;
+        protected Thread thrd;
 
         public MyThread()
         {
-            thrd = new Thread(this.Run);
-            thrd.Start();
+
+            this.thrd = new Thread(this.Run);
+            this.thrd.Start();
         }
 
-        abstract  protected virtual void Run();
-    }
-
-    struct Book
-    {
-        public Stopper name;
-        public Request author;
+        abstract protected virtual void Run();
 
     }
 
-
-
-    public class listenerThread:MyThread
+    public class QueueSynchronization<T>
     {
-        private Queue<Dictionary <Stopper,Request>> QueueStop;
+        private Queue<T> QueueObj;
+        private object lockQueue;
 
-        private object lockQueueDictionary;
+        public QueueSynchronization()
+        {
+            this.lockQueue = new object();
+            this.QueueObj = new Queue<T>();
+        }
 
-        listenerThread(Queue<Dictionary<Stopper, Request>> qd, object lockqd)
+
+        public void AddQueue(T t)
+        {
+            lock (lockQueue)
+            {
+                QueueObj.Enqueue(t);
+            }
+        }
+
+        public T RemoveQueue()
+        {
+            lock (lockQueue)
+            {
+                return QueueObj.Dequeue();
+            }
+        }
+
+        public int CountQueue()
+        {
+            lock (lockQueue)
+            {
+                return QueueObj.Count;
+            }
+        }
+    }
+
+    struct Element
+    {
+        public Stopper stopSignal;
+        public Request request;
+        public Element(Stopper _stopSignal, Request _request)
+        {
+            this.stopSignal = _stopSignal;
+            this.request = _request;
+        }
+    }
+
+
+
+    public class ProducerThread : MyThread, IDisposable
+    {
+        private QueueSynchronization<Element> QueueCommon;
+
+        private QueueSynchronization<Stopper> QueueStop;
+
+        private bool doing;
+
+        public ProducerThread(QueueSynchronization<Element> qc)
             : base()
         {
-            this.QueueStop = qd;
-            this.lockQueueDictionary = lockqd;
+            this.QueueCommon = qc;
+            this.doing = true;
+            this.QueueStop = new QueueSynchronization<Stopper>();
         }
 
         private override void Run()
         {
-            while (true)
-            {
-                Request request=null;
-                
-                lock (lockQueueStop)
-                {
-                    if (QueueStop.Count != 0)
-                    {
-                        request = Request.GetRequest(QueueStop.Dequeue());
-                    }
-                }
-                if (request != null)
-                {
-                    lock (lockQueueRequest)
-                    {
-                        QueueRequest.Enqueue(request);
-                    }
-                }
- 
-            }
-        }
-
-       public void addRequest(Stopper stop)
-        {
-            Dictionary<Stopper, Request> obj = new Dictionary<Stopper, Request>();
-           obj.Add
-            lock (lockQueueDictionary)
-            {
-                QueueStop.Enqueue(new Dictionary<Stopper, Request>().Add(stop,null));
-            }
-        }
-    }
-    public class ProcessManager
-    {
-        private Queue<Stopper> QueueStop;
-
-        private Queue<Request> QueueRequest;
-
-        private object lockQueueRequest;
-
-        private object lockQueueStop = new object();
-
-        ProcessManager(Queue<Request> qr, object lockqr)
-        {
-            this.QueueStop = new Queue<Stopper>();
-            this.QueueRequest = qr;
-            this.lockQueueRequest = lockqr;
-            Thread thread = new Thread(runThreadProcess);
-            thread.Start();
-        }
-
-        private void runThreadProcess()
-        {
-            while (true)
+            while (doing)
             {
                 Request request = null;
-
-                lock (lockQueueStop)
+                Stopper stop = null;
+                if (QueueStop.CountQueue() != 0)
                 {
-                    if (QueueStop.Count != 0)
-                    {
-                        request = Request.GetRequest(QueueStop.Dequeue());
-                    }
+                    stop = QueueStop.RemoveQueue();
+                    request = Request.GetRequest(stop);
                 }
-                if (request != null)
+                else
                 {
-                    lock (lockQueueRequest)
-                    {
-                        QueueRequest.Enqueue(request);
-                    }
+                    Thread.Sleep(5000);
                 }
-
+                if (request != null && stop != null)
+                {
+                    QueueCommon.AddQueue(new Element(stop, request));
+                }
             }
         }
-
+        public void cancel()
+        {
+            this.doing = false;
+        }
         public void addRequest(Stopper stop)
         {
-            lock (lockQueueStop)
-            {
-                QueueStop.Enqueue(stop);
-            }
+            QueueStop.AddQueue(stop);
+        }
+        public void Dispose()
+        {
+            cancel();
         }
     }
 
+    public class ConsumerThread : MyThread, IDisposable
+    {
+        private QueueSynchronization<Element> QueueCommon;
+
+        private bool doing;
+
+        ConsumerThread(QueueSynchronization<Element> qc)
+            : base()
+        {
+            this.QueueCommon = qc;
+            this.doing = true;
+        }
+
+        private override void Run()
+        {
+            while (doing)
+            {
+                Element element;
+                if (QueueCommon.CountQueue() != 0)
+                {
+                    element = QueueCommon.RemoveQueue();
+                    Request.ProcessRequest(element.request, element.stopSignal);
+                }
+                else
+                {
+                    Thread.Sleep(5000);
+                }
+            }
+        }
+
+        private void cancel()
+        {
+            this.doing = false;
+        }
+
+        public void Dispose()
+        {
+            cancel();
+        }
+
+    }
+
+    public class ManagerThread
+    {
+        private QueueSynchronization<Element> QueueCommon;
+
+        private int CountConsumerThread;
+
+        private int timeWork;
+
+        ManagerThread(int _CountConsumerThread, int _timeWork)
+        {
+            this.QueueCommon = new QueueSynchronization<Element>();
+
+            this.CountConsumerThread = _CountConsumerThread;
+
+            this.CountConsumerThread = _timeWork;
+
+        }
+
+        void Work()
+        {
+
+        }
+    }
 
     class Program
     {
