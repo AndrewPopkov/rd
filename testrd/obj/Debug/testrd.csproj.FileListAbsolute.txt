@@ -1,0 +1,2 @@
+C:\Users\Андрей\Desktop\testrd\testrd\bin\Debug\testrd.exe.config
+C:\Users\Андрей\Desktop\testrd\rd\testrd\bin\Debug\testrd.exe.config
