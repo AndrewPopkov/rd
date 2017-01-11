@@ -17,10 +17,9 @@ namespace testrd
         }
         public static Request GetRequest(Stopper stopSignal)
         {
-            //const int MAX_WAIT_MS = 100;
-            //int waitMs = rand() % MAX_WAIT_MS + 1;
-            //Sleep(waitMs); // emulate long-time operations
-
+            Random rnd = new Random(0, 30);
+            int value = rnd.Next();
+            Thread.Sleep(value * 1000);
             return stopSignal.IsStop ? null : (new Request());
         }
 
@@ -31,10 +30,10 @@ namespace testrd
             if (stopSignal.IsStop)
                 return;
 
-            ///* some processig there */
-            //const int MAX_WAIT_MS = 1000;
-            //int waitMs = rand() % MAX_WAIT_MS + 1;
-            //Sleep(waitMs); // emulate long-time operations
+            Random rnd = new Random(0, 30);
+            int value = rnd.Next();
+            Thread.Sleep(value * 1000);
+            return stopSignal.IsStop ? null : (new Request());
         }
     }
 
