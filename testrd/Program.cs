@@ -17,9 +17,18 @@ namespace testrd
         }
         public static Request GetRequest(Stopper stopSignal)
         {
-            Random rnd = new Random(0, 30);
+            Random rnd = new Random(3000);
             int value = rnd.Next();
-            Thread.Sleep(value * 1000);
+            int i = 0;
+            while (i <= value)
+            {
+                i++;
+                if (stopSignal.IsStop)
+                {
+                    break;
+                }
+                Thread.Sleep(1);
+            }
             return stopSignal.IsStop ? null : (new Request());
         }
 
@@ -27,21 +36,31 @@ namespace testrd
         /* Function from the task specification*/
         public static void ProcessRequest(Request request, Stopper stopSignal)
         {
-            if (stopSignal.IsStop)
-                return;
-
-            Random rnd = new Random(0, 30);
+            Random rnd = new Random(3000);
             int value = rnd.Next();
-            Thread.Sleep(value * 1000);
-            return stopSignal.IsStop ? null : (new Request());
+            int i = 0;
+            while (i<=value)
+            {
+                i++;
+                if (stopSignal.IsStop)
+                {
+                    break;
+                }
+                Thread.Sleep(1);
+            }
+
         }
     }
 
     public class Stopper
     {
-        public static event Action changeAllStopEvent;
+        private static event Action changeAllStopEvent;
         private bool isstop;
         private object lockStopper;
+        public static void changeAllStop()
+        {
+            changeAllStopEvent();
+        }
         public bool IsStop
         {
             get
@@ -76,7 +95,7 @@ namespace testrd
     }
 
 
-    abstract class MyThread
+    public abstract class MyThread
     {
         protected Thread thrd;
 
@@ -87,7 +106,7 @@ namespace testrd
             this.thrd.Start();
         }
 
-        abstract protected virtual void Run();
+        abstract protected  void Run();
 
     }
 
@@ -198,7 +217,7 @@ namespace testrd
 
         private bool doing;
 
-        ConsumerThread(QueueSynchronization<Element> qc)
+        public ConsumerThread(QueueSynchronization<Element> qc)
             : base()
         {
             this.QueueCommon = qc;
@@ -242,7 +261,11 @@ namespace testrd
 
         private int timeWork;
 
-        ManagerThread(int _CountConsumerThread, int _timeWork)
+        private ProducerThread pt;
+
+        private List<ConsumerThread> ctl;
+
+        public ManagerThread(int _CountConsumerThread, int _timeWork)
         {
             this.QueueCommon = new QueueSynchronization<Element>();
 
@@ -252,9 +275,41 @@ namespace testrd
 
         }
 
-        void Work()
+        public void Work()
         {
+            pt = new ProducerThread(QueueCommon);
+            ctl = new List<ConsumerThread>();
+            for (int i = 0; i < CountConsumerThread; i++)
+            {
+                 ctl.Add(new ConsumerThread(QueueCommon));
+            }
 
+            TimerCallback tm = new TimerCallback(this.Close);
+
+            Timer timer = new Timer(tm, null, 30000, System.Threading.Timeout.Infinite);
+            
+        }
+        public void SendRequest(Stopper stop)
+        {
+            if (pt != null)
+            {
+                pt.addRequest(stop);
+            }
+        }
+        private void Close( object obj)
+        {
+            Stopper.changeAllStop();
+            if (pt != null)
+            {
+                pt.Dispose();
+            }
+            if (ctl != null)
+            {
+                for (int i = 0; i < CountConsumerThread; i++)
+                {
+                    ctl[i].Dispose();
+                }
+            }
         }
     }
 
@@ -262,6 +317,20 @@ namespace testrd
     {
         static void Main(string[] args)
         {
+            ManagerThread mt = new ManagerThread(3, 30000);
+
+            mt.Work();
+
+            mt.SendRequest(new Stopper());
+
+            mt.SendRequest(new Stopper());
+
+            mt.SendRequest(new Stopper());
+
+            mt.SendRequest(new Stopper());
+
+            mt.SendRequest(new Stopper());
+
         }
     }
 }
